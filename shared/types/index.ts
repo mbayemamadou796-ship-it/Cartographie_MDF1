@@ -47,8 +47,30 @@ export interface ReportAttachment {
   uploadedAt?: string;
 }
 
+export interface ReportResponse {
+  id: string;
+  authorId?: string;
+  authorName: string;
+  authorRole: 'bureau' | 'referent' | 'admin';
+  content: string;
+  createdAt: string;
+  piecesJointes?: ReportAttachment[];
+}
+
+export interface ReportActionLog {
+  id: string;
+  date: string;
+  authorName: string;
+  authorRole?: string;
+  action: string;
+  previousStatus?: ReportingStatus;
+  newStatus?: ReportingStatus;
+  details?: string;
+}
+
 export interface WeeklyReport {
   id: string;
+  caseNumber?: string | number; // Ex: '#125'
   referentId: string;
   referentName: string;
   email: string;
@@ -68,6 +90,16 @@ export interface WeeklyReport {
   status: ReportingStatus;
   bureauNotes?: string;
   piecesJointes?: ReportAttachment[];
+  
+  // Pilotage, Responsable et cycle de traitement
+  responsableId?: string;
+  responsableName?: string;
+  datePriseEnCharge?: string; // Date à laquelle le statut est passé à EN_COURS
+  dateReponse?: string; // Date de la première réponse du Bureau
+  dateTraitement?: string; // Date à laquelle le statut est passé à TRAITE
+  reponses?: ReportResponse[]; // Historique des échanges / réponses Bureau-Référent
+  actionHistory?: ReportActionLog[]; // Traçabilité complète des actions
+
   createdAt: string;
   updatedAt?: string;
   lastActivityAt?: string; // Date de dernière modification ou réponse Bureau

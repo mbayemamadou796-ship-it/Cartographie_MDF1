@@ -1,18 +1,20 @@
 import React, { useState, useMemo } from 'react';
-import { WeeklyReport, CustomZone, ReportingStatus, UserRole, ReportingType, ReportingPriority } from '@shared/types';
+import { WeeklyReport, CustomZone, ReportingStatus, UserRole, ReportingType, ReportingPriority, Member } from '@shared/types';
 import { 
   Search, Filter, Calendar, MapPin, AlertTriangle, CheckCircle2, 
   Clock, MessageSquare, Download, HelpCircle, Eye, Trash2, 
   Users, Activity, ChevronRight, ChevronDown, ShieldAlert, Sparkles, PlusCircle,
   LayoutGrid, ListFilter, Layers, Check, ExternalLink, Archive, History, FolderKanban,
-  ArrowRight, ShieldCheck, Send, Zap, FileText, Paperclip, RefreshCw
+  ArrowRight, ShieldCheck, Send, Zap, FileText, Paperclip, RefreshCw, BarChart3
 } from 'lucide-react';
 import { ReportingWorkflowStepper } from './ReportingWorkflowStepper';
 import { PriorityBadge, ReportTypeBadge } from './PriorityBadge';
+import { PilotageDashboardView } from './PilotageDashboardView';
 
 interface AdminReportingViewProps {
   reports: WeeklyReport[];
   customZones: CustomZone[];
+  members?: Member[];
   userRole: UserRole;
   onOpenReportDetail: (report: WeeklyReport) => void;
   onUpdateStatus: (reportId: string, status: ReportingStatus, bureauNotes?: string) => void;
@@ -23,12 +25,14 @@ interface AdminReportingViewProps {
 export const AdminReportingView: React.FC<AdminReportingViewProps> = ({
   reports,
   customZones,
+  members = [],
   userRole,
   onOpenReportDetail,
   onUpdateStatus,
   onDeleteReport,
   onOpenNewReportForm
 }) => {
+  const [mainTab, setMainTab] = useState<'PILOTAGE' | 'CAS_MANAGEMENT'>('PILOTAGE');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedZone, setSelectedZone] = useState('ALL');
   const [selectedMonth, setSelectedMonth] = useState('ALL');
@@ -462,21 +466,79 @@ export const AdminReportingView: React.FC<AdminReportingViewProps> = ({
     <div className="space-y-6">
       
       {/* Top Header & Overview */}
-      <div className="bg-white p-6 rounded-3xl border border-emerald-200 shadow-sm">
-        <div className="flex items-center gap-2">
-          <span className="p-2 bg-emerald-100 text-emerald-800 rounded-2xl">
-            <Calendar className="w-5 h-5" />
-          </span>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 font-['Outfit']">
-            Remontées & Reportings des Référents par Zone
-          </h2>
+      <div className="bg-white p-6 rounded-3xl border border-emerald-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="p-2 bg-emerald-100 text-emerald-800 rounded-2xl">
+              <Calendar className="w-5 h-5" />
+            </span>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 font-['Outfit']">
+              Module Pilotage, Reporting & Coordination des Zones
+            </h2>
+          </div>
+          <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+            Vision objective de l'activité, de la réactivité, de l'état des cas remontés et de l'accompagnement des Référents régionaux.
+          </p>
         </div>
-        <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-          Vue centralisée classée par zone géographique pour suivre l'activité terrain, traiter les remontées ponctuelles et archiver l'historique.
-        </p>
+
+        {/* Primary View Switcher: Pilotage vs Gestion des Cas */}
+        <div className="flex items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200 self-start md:self-auto shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setMainTab('PILOTAGE')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              mainTab === 'PILOTAGE'
+                ? 'bg-emerald-950 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 text-emerald-400" />
+            <span>Tableau de Bord & Pilotage</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMainTab('CAS_MANAGEMENT')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              mainTab === 'CAS_MANAGEMENT'
+                ? 'bg-emerald-950 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FolderKanban className="w-4 h-4 text-emerald-400" />
+            <span>Gestion des Cas par Zone</span>
+          </button>
+        </div>
       </div>
 
-      {/* Operational Tracking Cycle Banner (Dynamic & Clickable) */}
+      {mainTab === 'PILOTAGE' ? (
+        <PilotageDashboardView
+          reports={reports}
+          customZones={customZones}
+          members={members}
+          userRole={userRole}
+          onOpenReportDetail={onOpenReportDetail}
+          onFilterZone={(z) => {
+            setSelectedZone(z);
+            setMainTab('CAS_MANAGEMENT');
+          }}
+          onFilterStatus={(s) => {
+            setStatusFilter(s);
+            setMainTab('CAS_MANAGEMENT');
+          }}
+          onFilterPriority={(p) => {
+            setPriorityFilter(p);
+            setMainTab('CAS_MANAGEMENT');
+          }}
+          onFilterType={(t) => {
+            setTypeFilter(t);
+            setMainTab('CAS_MANAGEMENT');
+          }}
+          onNavigateToCasManagement={() => setMainTab('CAS_MANAGEMENT')}
+        />
+      ) : (
+        <>
+          {/* Operational Tracking Cycle Banner (Dynamic & Clickable) */}
       <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white rounded-3xl p-5 border border-emerald-500/30 shadow-md space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-800/60 pb-2.5">
           <div className="flex items-center gap-2">
@@ -986,6 +1048,8 @@ export const AdminReportingView: React.FC<AdminReportingViewProps> = ({
         <div className="space-y-3">
           {filteredReports.map((report) => renderReportCard(report))}
         </div>
+      )}
+        </>
       )}
 
     </div>

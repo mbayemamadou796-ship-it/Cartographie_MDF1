@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { WeeklyReport, AppUser, CustomZone, UserRole, ReportingStatus } from '@shared/types';
+import { WeeklyReport, AppUser, CustomZone, UserRole, ReportingStatus, Member } from '@shared/types';
 import { ReferentReportingForm } from './ReferentReportingForm';
 import { AdminReportingView } from './AdminReportingView';
 import { ReportDetailModal } from './ReportDetailModal';
@@ -9,6 +9,7 @@ interface ReportingsViewProps {
   reports: WeeklyReport[];
   currentUser: AppUser | null;
   customZones: CustomZone[];
+  members?: Member[];
   userRole: UserRole;
   onSubmitReport: (reportData: Omit<WeeklyReport, 'id' | 'createdAt' | 'status'>) => void;
   onUpdateStatus: (reportId: string, status: ReportingStatus, bureauNotes?: string) => void;
@@ -19,6 +20,7 @@ export const ReportingsView: React.FC<ReportingsViewProps> = ({
   reports,
   currentUser,
   customZones,
+  members = [],
   userRole,
   onSubmitReport,
   onUpdateStatus,
@@ -71,6 +73,7 @@ export const ReportingsView: React.FC<ReportingsViewProps> = ({
         <ReferentReportingForm
           currentUser={currentUser}
           customZones={customZones}
+          members={members}
           myReports={myReports}
           onSubmitReport={(data) => {
             onSubmitReport(data);
@@ -84,6 +87,7 @@ export const ReportingsView: React.FC<ReportingsViewProps> = ({
         <AdminReportingView
           reports={reports}
           customZones={customZones}
+          members={members}
           userRole={userRole}
           onOpenReportDetail={handleOpenReportDetail}
           onUpdateStatus={onUpdateStatus}

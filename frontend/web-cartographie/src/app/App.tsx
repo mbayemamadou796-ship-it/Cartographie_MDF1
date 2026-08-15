@@ -481,10 +481,24 @@ export default function App() {
     return demandes.filter((d) => d.status === 'EN_ATTENTE').length;
   }, [demandes]);
 
-  // Weekly Reports State
+  // Weekly Reports State with Real-Time Synchronization
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>(() => {
     return ReportingService.getReports();
   });
+
+  useEffect(() => {
+    const syncReportsFromStorage = () => {
+      const latest = ReportingService.getReports();
+      setWeeklyReports(latest);
+    };
+
+    window.addEventListener('storage', syncReportsFromStorage);
+    window.addEventListener('mbok_reports_updated', syncReportsFromStorage);
+    return () => {
+      window.removeEventListener('storage', syncReportsFromStorage);
+      window.removeEventListener('mbok_reports_updated', syncReportsFromStorage);
+    };
+  }, []);
 
   const pendingReportingsCount = useMemo(() => {
     if (userRole === 'referent') {
@@ -1935,6 +1949,7 @@ export default function App() {
             reports={weeklyReports}
             currentUser={currentUser}
             customZones={customZones}
+            members={members}
             userRole={userRole}
             onSubmitReport={handleCreateWeeklyReport}
             onUpdateStatus={handleUpdateWeeklyReportStatus}
