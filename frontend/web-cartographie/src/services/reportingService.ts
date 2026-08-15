@@ -620,6 +620,134 @@ export class ReportingService {
     }
   }
 
+  static createReport(
+    reportData: Omit<WeeklyReport, 'id' | 'createdAt'>,
+    existingReports?: WeeklyReport[]
+  ): WeeklyReport {
+    const reports = existingReports || this.getReports();
+    const now = new Date().toISOString();
+    const calculatedPriority = reportData.priority || this.getPriorityFromUrgence(reportData.urgenceLevel || 1);
+    const nextCaseNumber = `#${126 + reports.length}`;
+
+    const newReport: WeeklyReport = {
+      ...reportData,
+      id: `rep-${Date.now()}`,
+      caseNumber: nextCaseNumber,
+      status: reportData.status || 'NOUVEAU',
+      type: reportData.type || 'PERIODIQUE',
+      priority: calculatedPriority,
+      reponses: reportData.reponses || [],
+      actionHistory: reportData.actionHistory || [
+        {
+          id: `act-${Date.now()}`,
+          date: now,
+          authorName: reportData.referentName || 'Référent de zone',
+          authorRole: `Référent ${reportData.zone}`,
+          action: `Création du ${reportData.type === 'PONCTUEL' ? 'cas ponctuel' : 'reporting périodique'} ${nextCaseNumber}`,
+          details: reportData.sujet || 'Transmission initiale'
+        }
+      ],
+      createdAt: now,
+      updatedAt: now,
+      lastActivityAt: now
+    };
+
+    const updated = [newReport, ...reports];
+    this.saveReports(updated);
+    return newReport;
+  }
+
+  static assignResponsable(
+    reportId: string,
+    responsableId: string,
+    responsableName: string,
+    existingReports?: WeeklyReport[]
+  ): WeeklyReport[] {
+    const reports = existingReports || this.getReports();
+    const now = new Date().toISOString();
+
+    const updated = reports.map((r) => {
+      if (r.id === reportId) {
+        const history = [...(r.actionHistory || [])];
+        history.push({
+          id: `act-${Date.now()}`,
+          date: now,
+          authorName: 'Bureau National MDF',
+          authorRole: 'Bureau National',
+          action: `Attribution du dossier à ${responsableName}`,
+          details: `Responsable assigné : ${responsableName}`
+        });
+
+        return {
+          ...r,
+          responsableId,
+          responsableName,
+          status: r.status === 'NOUVEAU' ? 'EN_COURS' : r.status,
+          datePriseEnCharge: r.datePriseEnCharge || now,
+          actionHistory: history,
+          updatedAt: now,
+          lastActivityAt: now
+        };
+      }
+      return r;
+    });
+
+    this.saveReports(updated);
+    return updated;
+  }
+
+  static addResponse(
+    reportId: string,
+    responseData: {
+      authorName: string;
+      authorRole?: 'bureau' | 'referent' | 'admin';
+      content: string;
+      piecesJointes?: any[];
+    },
+    existingReports?: WeeklyReport[]
+  ): WeeklyReport[] {
+    const reports = existingReports || this.getReports();
+    const now = new Date().toISOString();
+
+    const updated = reports.map((r) => {
+      if (r.id === reportId) {
+        const newResp: ReportResponse = {
+          id: `resp-${Date.now()}`,
+          authorName: responseData.authorName,
+          authorRole: responseData.authorRole || 'bureau',
+          content: responseData.content,
+          piecesJointes: responseData.piecesJointes,
+          createdAt: now
+        };
+
+        const history = [...(r.actionHistory || [])];
+        history.push({
+          id: `act-${Date.now()}`,
+          date: now,
+          authorName: responseData.authorName,
+          authorRole: responseData.authorRole === 'referent' ? 'Référent' : 'Bureau National',
+          action: responseData.authorRole === 'referent' ? 'Message ajouté par le Référent' : 'Réponse du Bureau transmise',
+          details: responseData.content.slice(0, 80) + (responseData.content.length > 80 ? '...' : '')
+        });
+
+        return {
+          ...r,
+          status: responseData.authorRole === 'referent' ? r.status : (r.status === 'NOUVEAU' ? 'EN_COURS' : r.status),
+          dateReponse: responseData.authorRole !== 'referent' ? now : r.dateReponse,
+          datePriseEnCharge: r.datePriseEnCharge || now,
+          reponses: [...(r.reponses || []), newResp],
+          actionHistory: history,
+          updatedAt: now,
+          lastActivityAt: now
+        };
+      }
+      return r;
+    });
+
+    this.saveReports(updated);
+    return updated;
+  }
+
   static addReport(reportData: Omit<WeeklyReport, 'id' | 'createdAt' | 'status'>): WeeklyReport {
     const reports = this.getReports();
     const now = new Date().toISOString();

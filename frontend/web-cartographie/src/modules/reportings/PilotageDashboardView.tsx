@@ -2,9 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { WeeklyReport, CustomZone, ReportingStatus, ReportingPriority, ReportingType, UserRole, Member } from '@shared/types';
 import { ReportingService, PilotageStatsResult } from '../../services/reportingService';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
-} from 'recharts';
+  CustomBarChartComparison, 
+  CustomHorizontalBarChart, 
+  CustomDonutChart, 
+  CustomAreaChart 
+} from './ReportingCharts';
 import { 
   Activity, TrendingUp, CheckCircle2, Clock, AlertTriangle, Users, 
   MapPin, ShieldAlert, Zap, Filter, Calendar, Award, Sparkles, HelpCircle, 
@@ -1095,7 +1097,7 @@ export const PilotageDashboardView: React.FC<PilotageDashboardViewProps> = ({
         </div>
       )}
 
-      {/* 5. Diagrammes 11, 12, 13 & 14 (Recharts dynamiques) */}
+      {/* 5. Diagrammes 11, 12, 13 & 14 (Graphiques SVG Interactifs Indépendants) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Graphique 1 : Cas remontés vs Cas traités (Section 11) */}
@@ -1114,26 +1116,7 @@ export const PilotageDashboardView: React.FC<PilotageDashboardViewProps> = ({
           </div>
 
           <div className="h-64 w-full">
-            {stats.chartRemontesVsTraites.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.chartRemontesVsTraites} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '12px' }}
-                    labelStyle={{ fontWeight: 'bold', color: '#34d399' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                  <Bar dataKey="remontes" name="Cas remontés" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="traites" name="Cas traités" fill="#10b981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                Aucune donnée sur la période sélectionnée
-              </div>
-            )}
+            <CustomBarChartComparison data={stats.chartRemontesVsTraites} />
           </div>
         </div>
 
@@ -1150,38 +1133,10 @@ export const PilotageDashboardView: React.FC<PilotageDashboardViewProps> = ({
           </div>
 
           <div className="h-64 w-full">
-            {stats.chartActivityPerReferent.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={stats.chartActivityPerReferent.slice(0, 6)}
-                  layout="vertical"
-                  margin={{ top: 5, right: 20, left: 30, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
-                  <YAxis dataKey="referentName" type="category" tick={{ fontSize: 11, fill: '#1e293b' }} width={90} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '12px' }}
-                    labelStyle={{ fontWeight: 'bold', color: '#60a5fa' }}
-                  />
-                  <Bar 
-                    dataKey="count" 
-                    name="Remontées totales" 
-                    fill="#6366f1" 
-                    radius={[0, 4, 4, 0]}
-                    onClick={(entry) => {
-                      if (entry && entry.referentName) {
-                        setSelectedReferent(entry.referentName);
-                      }
-                    }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                Aucune donnée
-              </div>
-            )}
+            <CustomHorizontalBarChart 
+              data={stats.chartActivityPerReferent} 
+              onSelectReferent={(name) => setSelectedReferent(name)}
+            />
           </div>
         </div>
 
@@ -1202,39 +1157,13 @@ export const PilotageDashboardView: React.FC<PilotageDashboardViewProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 items-center gap-4 h-64">
             <div className="h-full w-full">
-              {stats.chartStatusDistribution.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={stats.chartStatusDistribution}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={75}
-                      paddingAngle={4}
-                      dataKey="value"
-                      onClick={(entry) => {
-                        if (entry && entry.name) {
-                          const s = entry.name === 'Nouveau' ? 'NOUVEAU' : entry.name === 'En cours' ? 'EN_COURS' : 'TRAITE';
-                          if (onFilterStatus) onFilterStatus(s);
-                        }
-                      }}
-                      className="cursor-pointer"
-                    >
-                      {stats.chartStatusDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '12px' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                  Aucun cas
-                </div>
-              )}
+              <CustomDonutChart 
+                data={stats.chartStatusDistribution} 
+                onSelectStatus={(statusName) => {
+                  const s = statusName === 'Nouveau' ? 'NOUVEAU' : statusName === 'En cours' ? 'EN_COURS' : 'TRAITE';
+                  if (onFilterStatus) onFilterStatus(s);
+                }}
+              />
             </div>
 
             <div className="space-y-2.5 pr-2">
@@ -1287,30 +1216,7 @@ export const PilotageDashboardView: React.FC<PilotageDashboardViewProps> = ({
           </div>
 
           <div className="h-64 w-full">
-            {stats.chartTimelineActivity.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stats.chartTimelineActivity} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0d9488" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#0d9488" stopOpacity={0.0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '12px' }}
-                    labelStyle={{ fontWeight: 'bold', color: '#2dd4bf' }}
-                  />
-                  <Area type="monotone" dataKey="count" name="Remontées" stroke="#0d9488" strokeWidth={2.5} fillOpacity={1} fill="url(#colorCount)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                Aucune donnée chronologique
-              </div>
-            )}
+            <CustomAreaChart data={stats.chartTimelineActivity} />
           </div>
         </div>
 

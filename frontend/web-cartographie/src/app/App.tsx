@@ -261,14 +261,37 @@ export default function App() {
     } catch {}
   };
 
-  // Save members to localStorage
+  // Save members to localStorage and broadcast change
   useEffect(() => {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(members));
+      window.dispatchEvent(new CustomEvent('mbok_members_updated', { detail: members }));
     } catch {
       // Ignore quota errors
     }
   }, [members]);
+
+  // Synchronize members across storage events
+  useEffect(() => {
+    const syncMembers = (e: any) => {
+      try {
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMembers(parsed);
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('storage', syncMembers);
+    window.addEventListener('mbok_members_updated', syncMembers);
+    return () => {
+      window.removeEventListener('storage', syncMembers);
+      window.removeEventListener('mbok_members_updated', syncMembers);
+    };
+  }, []);
 
   // Custom Zones State with LocalStorage Persistence & Guaranteed 13 Metropolitan Region Cards
   const [customZones, setCustomZones] = useState<CustomZone[]>(() => {
@@ -308,6 +331,7 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem(LOCAL_STORAGE_ZONES_KEY, JSON.stringify(customZones));
+      window.dispatchEvent(new CustomEvent('mbok_zones_updated', { detail: customZones }));
     } catch {}
   }, [customZones]);
 
@@ -379,19 +403,28 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Mode of App: 'bureau' (Cartographie MDF Admin) or 'formulaire' (Public Member Portal)
-  const [appMode, setAppMode] = useState<'bureau' | 'formulaire'>(() => {
+  // Mode of App: 'cartographie', 'referent', 'admin', or 'formulaire'
+  const [appMode, setAppMode] = useState<'cartographie' | 'referent' | 'admin' | 'formulaire'>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const appParam = params.get('app');
       if (appParam === 'formulaire' || window.location.pathname.includes('/formulaire')) {
         return 'formulaire';
       }
+      if (appParam === 'referent' || window.location.pathname.includes('/referent')) {
+        return 'referent';
+      }
+      if (appParam === 'admin' || window.location.pathname.includes('/admin')) {
+        return 'admin';
+      }
+      if (appParam === 'bureau' || appParam === 'cartographie') {
+        return 'cartographie';
+      }
     }
-    return 'bureau';
+    return 'cartographie';
   });
 
-  const switchAppMode = (mode: 'bureau' | 'formulaire') => {
+  const switchAppMode = (mode: 'cartographie' | 'referent' | 'admin' | 'formulaire') => {
     setAppMode(mode);
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
@@ -406,8 +439,12 @@ export default function App() {
       const appParam = params.get('app');
       if (appParam === 'formulaire') {
         setAppMode('formulaire');
-      } else if (appParam === 'bureau' || appParam === 'cartographie') {
-        setAppMode('bureau');
+      } else if (appParam === 'referent') {
+        setAppMode('referent');
+      } else if (appParam === 'admin') {
+        setAppMode('admin');
+      } else {
+        setAppMode('cartographie');
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -1707,7 +1744,7 @@ export default function App() {
 
   // Public Member Form Application (Accessible directly via ?app=formulaire or /formulaire without requiring login)
   if (appMode === 'formulaire') {
-    return <AppFormulaire onSwitchToBureau={() => switchAppMode('bureau')} logoUrl={appSettings.logoUrl} />;
+    return <AppFormulaire onSwitchToBureau={() => switchAppMode('cartographie')} logoUrl={appSettings.logoUrl} />;
   }
 
   if (!currentUser) {
@@ -1724,40 +1761,6 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-[#f0f8f3] text-slate-800 font-['Plus_Jakarta_Sans',sans-serif]">
       
-      {/* Top Application Mode Switcher Banner */}
-      <div className="bg-slate-900 text-slate-200 py-1.5 px-4 text-xs flex items-center justify-between border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 font-bold text-emerald-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Espace Bureau Administrateur — Cartographie MDF
-          </span>
-          {pendingDemandesCount > 0 && (
-            <span
-              onClick={() => setActiveTab('demandes')}
-              className="bg-amber-500 text-slate-950 font-black px-2 py-0.5 rounded-full text-[10px] cursor-pointer hover:bg-amber-400 transition-colors animate-pulse"
-            >
-              {pendingDemandesCount} demande(s) en attente
-            </span>
-          )}
-          {pendingReportingsCount > 0 && userRole === 'admin' && (
-            <span
-              onClick={() => setActiveTab('reportings')}
-              className="bg-emerald-500 text-slate-950 font-black px-2 py-0.5 rounded-full text-[10px] cursor-pointer hover:bg-emerald-400 transition-colors"
-            >
-              {pendingReportingsCount} reporting(s) à traiter
-            </span>
-          )}
-        </div>
-
-        <button
-          onClick={() => switchAppMode('formulaire')}
-          className="hover:text-white bg-slate-800 hover:bg-emerald-800 text-emerald-300 font-bold px-3 py-1 rounded-lg border border-emerald-700/50 transition-all flex items-center gap-1.5 text-[11px] cursor-pointer"
-        >
-          <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Ouvrir l'application Formulaire (?app=formulaire)</span>
-        </button>
-      </div>
-
       {/* Top Header */}
       <Header
         userRole={userRole}
