@@ -531,9 +531,12 @@ export default function App() {
 
     window.addEventListener('storage', syncReportsFromStorage);
     window.addEventListener('mbok_reports_updated', syncReportsFromStorage);
+    const interval = setInterval(syncReportsFromStorage, 1000);
+
     return () => {
       window.removeEventListener('storage', syncReportsFromStorage);
       window.removeEventListener('mbok_reports_updated', syncReportsFromStorage);
+      clearInterval(interval);
     };
   }, []);
 

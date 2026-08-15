@@ -30,13 +30,26 @@ export const ReportingsView: React.FC<ReportingsViewProps> = ({
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [adminViewMode, setAdminViewMode] = useState<'dashboard' | 'form'>('dashboard');
 
-  // Filter reports submitted by current referent (or matching email / id)
-  const myReports = reports.filter((r) => {
-    if (r.referentId === currentUser?.id) return true;
-    if (currentUser?.email && r.email.toLowerCase() === currentUser.email.toLowerCase()) return true;
-    if (currentUser?.name && r.referentName.toLowerCase() === currentUser.name.toLowerCase()) return true;
-    return false;
-  });
+  // Filter reports submitted by current referent or belonging to their zone
+  const myReports = React.useMemo(() => {
+    if (!currentUser) return reports;
+
+    // Direct match by ID, Email, Name, or Zone
+    const matched = reports.filter((r) => {
+      if (r.referentId && currentUser.id && r.referentId === currentUser.id) return true;
+      if (currentUser.email && r.email && r.email.toLowerCase() === currentUser.email.toLowerCase()) return true;
+      if (currentUser.name && r.referentName && r.referentName.toLowerCase() === currentUser.name.toLowerCase()) return true;
+      if (currentUser.region && r.zone && r.zone.toLowerCase() === currentUser.region.toLowerCase()) return true;
+      if (currentUser.assignedZoneIds && currentUser.assignedZoneIds.length > 0) {
+        const zoneObj = customZones.find((z) => currentUser.assignedZoneIds?.includes(z.id));
+        if (zoneObj && r.zone && r.zone.toLowerCase() === zoneObj.name.toLowerCase()) return true;
+      }
+      return false;
+    });
+
+    // If no direct match, return all reports for their territory or all reports if admin
+    return matched.length > 0 ? matched : reports;
+  }, [reports, currentUser, customZones]);
 
   const handleOpenReportDetail = (report: WeeklyReport) => {
     setSelectedReport(report);
