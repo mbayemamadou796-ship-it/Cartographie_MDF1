@@ -28,12 +28,14 @@ import { EditLogoModal } from '../components/EditLogoModal';
 import { LoginScreen } from '../components/LoginScreen';
 import { DemandesView } from '../modules/demandes/DemandesView';
 import { DemandeService } from '../services/demandeService';
-import { DemandeMember } from '../types';
+import { DemandeMember, WeeklyReport, ReportingStatus } from '../types';
 import { AppFormulaire } from '../../../web-formulaire/src/app/AppFormulaire';
 import { exportToExcel, exportToCsv } from '../utils/excelUtils';
 import { FRENCH_ZONES } from '../modules/membres/AdminMemberFormModal';
 import { geocodeVille, calculateCityOffsetCoordinates } from '../services/geocodingService';
-import { CheckCircle2, MapPin, Users, ArrowRight, Layers, FileText, ExternalLink } from 'lucide-react';
+import { ReportingsView } from '../modules/reportings/ReportingsView';
+import { ReportingService } from '../services/reportingService';
+import { CheckCircle2, MapPin, Users, ArrowRight, Layers, FileText, ExternalLink, ClipboardList } from 'lucide-react';
 
 const LOCAL_STORAGE_KEY = 'mbok_de_france_members_v1';
 const LOCAL_STORAGE_UPDATE_KEY = 'mbok_de_france_last_update_v1';
@@ -479,11 +481,85 @@ export default function App() {
     return demandes.filter((d) => d.status === 'EN_ATTENTE').length;
   }, [demandes]);
 
+  // Weekly Reports State
+  const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>(() => {
+    return ReportingService.getReports();
+  });
+
+  const pendingReportingsCount = useMemo(() => {
+    if (userRole === 'referent') {
+      // For referent, count their reports that have a Bureau response or pending
+      return weeklyReports.filter(
+        (r) =>
+          (r.referentId === currentUser?.id || r.email === currentUser?.email) &&
+          r.status !== 'TRAITE'
+      ).length;
+    }
+    // For admin, count all reports that need attention (new or need bureau feedback)
+    return weeklyReports.filter(
+      (r) => r.status === 'NOUVEAU' || (r.besoinRetourBureau && r.status !== 'TRAITE')
+    ).length;
+  }, [weeklyReports, userRole, currentUser]);
+
+  const handleCreateWeeklyReport = (reportData: Omit<WeeklyReport, 'id' | 'createdAt' | 'status'>) => {
+    const newReport = ReportingService.addReport(reportData);
+    setWeeklyReports(ReportingService.getReports());
+
+    addAuditLog(
+      'system',
+      'Nouveau reporting hebdomadaire',
+      `Reporting soumis par ${reportData.referentName} pour la Zone ${reportData.zone} (Semaine du ${reportData.semaineLundi})`,
+      reportData.urgenceLevel >= 4 ? 'danger' : reportData.besoinRetourBureau ? 'warning' : 'info',
+      newReport.id,
+      reportData.zone
+    );
+
+    showToast(`Reporting pour la zone ${reportData.zone} transmis avec succès !`);
+  };
+
+  const handleUpdateWeeklyReportStatus = (
+    reportId: string,
+    status: ReportingStatus,
+    bureauNotes?: string
+  ) => {
+    const updated = ReportingService.updateReportStatus(
+      reportId,
+      status,
+      bureauNotes,
+      currentUser?.name || 'Administrateur MDF'
+    );
+    setWeeklyReports(updated);
+
+    const target = updated.find((r) => r.id === reportId);
+
+    addAuditLog(
+      'system',
+      'Mise à jour reporting hebdomadaire',
+      `Statut du reporting de ${target?.referentName || 'la zone'} passé à "${status}"${bureauNotes ? ' avec réponse' : ''}`,
+      'info',
+      reportId,
+      target?.zone
+    );
+
+    showToast(`Statut du reporting mis à jour (${status}).`);
+  };
+
+  const handleDeleteWeeklyReport = (reportId: string) => {
+    if (userRole !== 'admin') {
+      showToast("Action réservée aux administrateurs.");
+      return;
+    }
+    const updated = ReportingService.deleteReport(reportId);
+    setWeeklyReports(updated);
+    addAuditLog('system', 'Suppression reporting', `Reporting ${reportId} supprimé`, 'warning', reportId);
+    showToast('Reporting supprimé.');
+  };
+
   // Security Guard: Reset active tab for non-admin users if viewing an admin-only tab
   useEffect(() => {
     const allowedTabs = userRole === 'admin'
-      ? ['dashboard', 'directory', 'zones', 'demandes', 'users', 'quality', 'import_export', 'audit_logs', 'settings']
-      : ['dashboard', 'directory', 'zones', 'demandes'];
+      ? ['dashboard', 'directory', 'zones', 'reportings', 'demandes', 'users', 'quality', 'import_export', 'audit_logs', 'settings']
+      : ['dashboard', 'directory', 'zones', 'reportings', 'demandes'];
 
     if (!allowedTabs.includes(activeTab)) {
       setActiveTab('directory');
@@ -1649,6 +1725,14 @@ export default function App() {
               {pendingDemandesCount} demande(s) en attente
             </span>
           )}
+          {pendingReportingsCount > 0 && userRole === 'admin' && (
+            <span
+              onClick={() => setActiveTab('reportings')}
+              className="bg-emerald-500 text-slate-950 font-black px-2 py-0.5 rounded-full text-[10px] cursor-pointer hover:bg-emerald-400 transition-colors"
+            >
+              {pendingReportingsCount} reporting(s) à traiter
+            </span>
+          )}
         </div>
 
         <button
@@ -1690,6 +1774,7 @@ export default function App() {
         userRole={userRole}
         qualityIssueCount={qualityIssueCount}
         pendingDemandesCount={pendingDemandesCount}
+        pendingReportingsCount={pendingReportingsCount}
       />
 
       {/* Collapsible Filters Panel (When opened in directory tab) */}
@@ -1841,6 +1926,19 @@ export default function App() {
             onToggleMemberInZone={handleToggleMemberInZone}
             onOpenAddMemberInZone={handleOpenAddMemberInZone}
             onSelectMemberDetails={(m) => setActiveDetailsMember(m)}
+          />
+        )}
+
+        {/* Tab: Reportings Hebdomadaires des Référents */}
+        {activeTab === 'reportings' && (
+          <ReportingsView
+            reports={weeklyReports}
+            currentUser={currentUser}
+            customZones={customZones}
+            userRole={userRole}
+            onSubmitReport={handleCreateWeeklyReport}
+            onUpdateStatus={handleUpdateWeeklyReportStatus}
+            onDeleteReport={handleDeleteWeeklyReport}
           />
         )}
 

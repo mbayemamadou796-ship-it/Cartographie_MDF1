@@ -32,7 +32,48 @@ export type SortOption = 'nom_asc' | 'nom_desc' | 'ville_asc' | 'organisation_as
 
 export type QualityFilter = 'all' | 'no_phone' | 'no_email' | 'no_location' | 'duplicates';
 
-export type ActiveTab = 'dashboard' | 'directory' | 'zones' | 'users' | 'quality' | 'demandes' | 'import_export' | 'audit_logs' | 'settings';
+export type ActiveTab = 'dashboard' | 'directory' | 'zones' | 'reportings' | 'demandes' | 'users' | 'quality' | 'import_export' | 'audit_logs' | 'settings';
+
+export type ReportingStatus = 'NOUVEAU' | 'EN_COURS' | 'TRAITE';
+export type ReportingType = 'PERIODIQUE' | 'PONCTUEL';
+export type ReportingPriority = 'NORMAL' | 'IMPORTANT' | 'URGENT';
+
+export interface ReportAttachment {
+  id?: string;
+  name: string;
+  size?: number;
+  type?: string;
+  url?: string;
+  uploadedAt?: string;
+}
+
+export interface WeeklyReport {
+  id: string;
+  referentId: string;
+  referentName: string;
+  email: string;
+  telephone?: string;
+  zone: string;
+  zoneId?: string;
+  type?: ReportingType; // 'PERIODIQUE' (défaut) ou 'PONCTUEL' (urgence / demande ciblée)
+  sujet?: string; // Titre du problème ou objet de la remontée ponctuelle
+  priority?: ReportingPriority; // 'NORMAL' | 'IMPORTANT' | 'URGENT'
+  semaineLundi: string; // YYYY-MM-DD format (Lundi de la semaine ou date du jour)
+  nouveauxContactes?: string;
+  situationsPrioritaires?: string;
+  activitesLocales?: string;
+  besoinRetourBureau: boolean;
+  detailsDemandeRetour?: string;
+  urgenceLevel: number; // 1 to 5 (1 = Routine, 5 = Urgent)
+  status: ReportingStatus;
+  bureauNotes?: string;
+  piecesJointes?: ReportAttachment[];
+  createdAt: string;
+  updatedAt?: string;
+  lastActivityAt?: string; // Date de dernière modification ou réponse Bureau
+  reviewedBy?: string;
+  reviewedAt?: string;
+}
 
 export type DemandeType = 'INSCRIPTION' | 'MISE_A_JOUR';
 export type DemandeStatus = 'EN_ATTENTE' | 'VALIDEE' | 'REFUSEE';
