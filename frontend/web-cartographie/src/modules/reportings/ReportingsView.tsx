@@ -56,6 +56,16 @@ export const ReportingsView: React.FC<ReportingsViewProps> = ({
     setIsDetailModalOpen(true);
   };
 
+  // Keep selectedReport in sync with real-time updates
+  React.useEffect(() => {
+    if (selectedReport) {
+      const fresh = reports.find((r) => r.id === selectedReport.id);
+      if (fresh) {
+        setSelectedReport(fresh);
+      }
+    }
+  }, [reports]);
+
   const handleCloseDetail = () => {
     setIsDetailModalOpen(false);
     setSelectedReport(null);

@@ -87,7 +87,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
 
   const visibleTabs = userRole === 'admin'
     ? tabs
-    : tabs.filter((t) => ['dashboard', 'directory', 'zones', 'reportings', 'demandes'].includes(t.id));
+    : tabs.filter((t) => ['dashboard', 'directory', 'zones', 'reportings'].includes(t.id));
 
   return (
     <div className="bg-white border-b border-emerald-200 sticky top-[61px] z-20 shadow-2xs">

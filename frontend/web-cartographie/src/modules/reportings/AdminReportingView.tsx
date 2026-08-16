@@ -7,7 +7,8 @@ import {
   Clock, MessageSquare, Download, HelpCircle, Eye, Trash2, 
   Users, Activity, ChevronRight, ChevronDown, ShieldAlert, Sparkles, PlusCircle,
   LayoutGrid, ListFilter, Layers, Check, ExternalLink, Archive, History, FolderKanban,
-  ArrowRight, ShieldCheck, Send, Zap, FileText, BarChart3, UserCheck, Inbox, CheckCheck
+  ArrowRight, ShieldCheck, Send, Zap, FileText, BarChart3, UserCheck, Inbox, CheckCheck,
+  Folder, FolderOpen
 } from 'lucide-react';
 import { ReportingWorkflowStepper } from './ReportingWorkflowStepper';
 import { PriorityBadge, ReportTypeBadge } from './PriorityBadge';
@@ -17,8 +18,9 @@ export type ReportingSubTab =
   | 'LISTE'       // Toutes les remontées
   | 'URGENCES'    // Urgences & À traiter
   | 'PIPELINE'    // Suivi des cas / Kanban
-  | 'PILOTAGE'    // Statistiques & Pilotage
-  | 'NOUVEAU';    // Formulaire de saisie
+  | 'PILOTAGE';   // Statistiques & Pilotage
+
+export type ReportViewMode = 'BY_MONTH' | 'BY_ZONE' | 'FLAT_LIST';
 
 interface AdminReportingViewProps {
   reports: WeeklyReport[];
@@ -52,24 +54,35 @@ export const AdminReportingView: React.FC<AdminReportingViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | ReportingStatus>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | ReportingPriority>('ALL');
   const [besoinRetourFilter, setBesoinRetourFilter] = useState<'ALL' | 'OUI' | 'NON'>('ALL');
-  const [viewMode, setViewMode] = useState<'BY_ZONE' | 'FLAT_LIST'>('FLAT_LIST');
+  
+  // Default to BY_MONTH (Dossiers Mensuels)
+  const [viewMode, setViewMode] = useState<ReportViewMode>('BY_MONTH');
+  const [collapsedMonths, setCollapsedMonths] = useState<Record<string, boolean>>({});
   const [collapsedZones, setCollapsedZones] = useState<Record<string, boolean>>({});
+
+  // Helper to extract formatted month label from date string
+  const getMonthKeyAndLabel = (dateStr?: string) => {
+    if (!dateStr) return { key: 'NON_DATE', label: 'Dossier sans date' };
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return { key: 'NON_DATE', label: 'Dossier sans date' };
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const rawLabel = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      const label = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1);
+      return { key, label };
+    } catch {
+      return { key: 'NON_DATE', label: 'Dossier sans date' };
+    }
+  };
 
   // Extract unique months
   const availableMonths = useMemo(() => {
     const monthsMap = new Map<string, string>();
     reports.forEach((r) => {
       const dStr = r.semaineLundi || r.createdAt;
-      if (dStr) {
-        try {
-          const d = new Date(dStr);
-          if (!isNaN(d.getTime())) {
-            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-            const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
-            monthsMap.set(key, capitalized);
-          }
-        } catch {}
+      const { key, label } = getMonthKeyAndLabel(dStr);
+      if (key !== 'NON_DATE') {
+        monthsMap.set(key, label);
       }
     });
 
@@ -124,11 +137,8 @@ export const AdminReportingView: React.FC<AdminReportingViewProps> = ({
       // Month filter
       if (selectedMonth !== 'ALL') {
         const dStr = r.semaineLundi || r.createdAt;
-        if (dStr) {
-          const d = new Date(dStr);
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-          if (key !== selectedMonth) return false;
-        }
+        const { key } = getMonthKeyAndLabel(dStr);
+        if (key !== selectedMonth) return false;
       }
 
       // Type filter
@@ -155,6 +165,35 @@ export const AdminReportingView: React.FC<AdminReportingViewProps> = ({
     });
   }, [reports, subTab, searchQuery, selectedZone, selectedMonth, typeFilter, statusFilter, priorityFilter, besoinRetourFilter]);
 
+  // Grouped by Month (Dossiers Mensuels)
+  const groupedByMonth = useMemo(() => {
+    const groups: Record<string, { label: string; key: string; reports: WeeklyReport[] }> = {};
+
+    filteredReports.forEach((r) => {
+      const dStr = r.semaineLundi || r.createdAt;
+      const { key, label } = getMonthKeyAndLabel(dStr);
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          label,
+          reports: []
+        };
+      }
+      groups[key].reports.push(r);
+    });
+
+    // Sort reports inside each month (newest first)
+    Object.values(groups).forEach((g) => {
+      g.reports.sort((a, b) => {
+        return (b.semaineLundi || '').localeCompare(a.semaineLundi || '') ||
+               (b.createdAt || '').localeCompare(a.createdAt || '');
+      });
+    });
+
+    // Sort months descending (e.g. 2026-08 before 2026-07)
+    return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
+  }, [filteredReports]);
+
   // Grouped by Zone
   const groupedByZone = useMemo(() => {
     const groups: Record<string, WeeklyReport[]> = {};
@@ -176,6 +215,13 @@ export const AdminReportingView: React.FC<AdminReportingViewProps> = ({
 
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [filteredReports]);
+
+  const toggleMonthCollapse = (monthKey: string) => {
+    setCollapsedMonths((prev) => ({
+      ...prev,
+      [monthKey]: !prev[monthKey]
+    }));
+  };
 
   const toggleZoneCollapse = (zoneName: string) => {
     setCollapsedZones((prev) => ({
@@ -504,37 +550,54 @@ export const AdminReportingView: React.FC<AdminReportingViewProps> = ({
                   <option value="PONCTUEL">Cas ponctuel</option>
                 </select>
 
-                {/* View Mode Toggle (Flat vs By Zone) */}
+                {/* View Mode Toggle: Dossiers par Mois (Default) / Par Zone / Liste plate */}
                 <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
                   <button
                     type="button"
-                    onClick={() => setViewMode('FLAT_LIST')}
-                    className={`p-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      viewMode === 'FLAT_LIST' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'
+                    onClick={() => setViewMode('BY_MONTH')}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      viewMode === 'BY_MONTH' ? 'bg-white text-emerald-950 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
                     }`}
-                    title="Liste chronologique"
+                    title="Regrouper en dossiers mensuels"
                   >
-                    <ListFilter className="w-3.5 h-3.5" />
+                    <Folder className="w-3.5 h-3.5 text-amber-600" />
+                    <span className="hidden sm:inline">Dossiers Mois</span>
                   </button>
+
                   <button
                     type="button"
                     onClick={() => setViewMode('BY_ZONE')}
-                    className={`p-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      viewMode === 'BY_ZONE' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      viewMode === 'BY_ZONE' ? 'bg-white text-emerald-950 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
                     }`}
-                    title="Regroupé par antenne"
+                    title="Regrouper par zone / antenne"
                   >
-                    <Layers className="w-3.5 h-3.5" />
+                    <Layers className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="hidden sm:inline">Par Zone</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('FLAT_LIST')}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      viewMode === 'FLAT_LIST' ? 'bg-white text-emerald-950 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                    title="Liste chronologique continue"
+                  >
+                    <ListFilter className="w-3.5 h-3.5 text-slate-600" />
+                    <span className="hidden sm:inline">Liste</span>
                   </button>
                 </div>
+
               </div>
             </div>
 
             {/* Active Filters feedback */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
               <span>
-                <strong className="text-slate-800 font-bold">{filteredReports.length}</strong> dossier{filteredReports.length > 1 ? 's' : ''} affiché{filteredReports.length > 1 ? 's' : ''}
+                <strong className="text-slate-800 font-bold">{filteredReports.length}</strong> dossier{filteredReports.length > 1 ? 's' : ''} au total
                 {subTab === 'URGENCES' && ' (Filtre Urgences actif)'}
+                {viewMode === 'BY_MONTH' && ` • Réparti en ${groupedByMonth.length} dossier${groupedByMonth.length > 1 ? 's' : ''} mensuel${groupedByMonth.length > 1 ? 's' : ''}`}
               </span>
               {hasActiveFilters && (
                 <button
@@ -547,7 +610,7 @@ export const AdminReportingView: React.FC<AdminReportingViewProps> = ({
             </div>
           </div>
 
-          {/* List of Reports */}
+          {/* Main List Rendering */}
           {filteredReports.length === 0 ? (
             <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center space-y-2">
               <Inbox className="w-10 h-10 text-slate-300 mx-auto" />
@@ -562,7 +625,102 @@ export const AdminReportingView: React.FC<AdminReportingViewProps> = ({
                 </button>
               )}
             </div>
+          ) : viewMode === 'BY_MONTH' ? (
+            /* ========================================================================= */
+            /* 📁 GROUPED IN MONTHLY FOLDERS (DOSSIERS PAR MOIS) */
+            /* ========================================================================= */
+            <div className="space-y-4">
+              {groupedByMonth.map((monthGroup) => {
+                const isCollapsed = !!collapsedMonths[monthGroup.key];
+                const monthUrgentCount = monthGroup.reports.filter(r => (r.priority === 'URGENT' || r.urgenceLevel >= 4) && r.status !== 'TRAITE').length;
+                const monthNeedBureauCount = monthGroup.reports.filter(r => r.besoinRetourBureau && r.status !== 'TRAITE').length;
+                const monthNewCount = monthGroup.reports.filter(r => r.status === 'NOUVEAU').length;
+                const monthTraiteCount = monthGroup.reports.filter(r => r.status === 'TRAITE').length;
+                const resolutionRate = monthGroup.reports.length > 0 
+                  ? Math.round((monthTraiteCount / monthGroup.reports.length) * 100) 
+                  : 0;
+
+                return (
+                  <div 
+                    key={monthGroup.key} 
+                    className="bg-slate-50/90 rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all"
+                  >
+                    {/* Folder Header Card */}
+                    <div
+                      onClick={() => toggleMonthCollapse(monthGroup.key)}
+                      className="p-4 sm:p-5 bg-white border-b border-slate-200/80 cursor-pointer hover:bg-slate-50/60 transition flex flex-col md:flex-row md:items-center md:justify-between gap-3 select-none"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                          {isCollapsed ? (
+                            <Folder className="w-6 h-6" />
+                          ) : (
+                            <FolderOpen className="w-6 h-6" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-base font-extrabold text-slate-900">
+                              Dossier Mensuel — {monthGroup.label}
+                            </h3>
+                            <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 font-extrabold text-xs rounded-full border border-amber-200">
+                              {monthGroup.reports.length} remontée{monthGroup.reports.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
+                            <span>Taux de résolution : <strong className="text-slate-800 font-bold">{resolutionRate}%</strong> ({monthTraiteCount}/{monthGroup.reports.length})</span>
+                            <span>•</span>
+                            <span>Dernière activité : {new Date(monthGroup.reports[0].createdAt).toLocaleDateString('fr-FR')}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Folder Badges & Toggle Button */}
+                      <div className="flex items-center flex-wrap gap-2 self-end md:self-auto">
+                        {monthNewCount > 0 && (
+                          <span className="px-2.5 py-1 bg-blue-100 text-blue-900 text-xs font-bold rounded-xl border border-blue-200">
+                            {monthNewCount} nouveau{monthNewCount > 1 ? 'x' : ''}
+                          </span>
+                        )}
+
+                        {monthNeedBureauCount > 0 && (
+                          <span className="px-2.5 py-1 bg-amber-100 text-amber-900 text-xs font-bold rounded-xl border border-amber-300 flex items-center gap-1">
+                            <HelpCircle className="w-3 h-3 text-amber-700" />
+                            <span>{monthNeedBureauCount} attente bureau</span>
+                          </span>
+                        )}
+
+                        {monthUrgentCount > 0 && (
+                          <span className="px-2.5 py-1 bg-red-100 text-red-900 text-xs font-bold rounded-xl border border-red-300 flex items-center gap-1 animate-pulse">
+                            <AlertTriangle className="w-3 h-3 text-red-700" />
+                            <span>{monthUrgentCount} urgent</span>
+                          </span>
+                        )}
+
+                        <button
+                          type="button"
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition ml-1"
+                        >
+                          {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Folder Content: Reports of the Month */}
+                    {!isCollapsed && (
+                      <div className="p-4 space-y-3">
+                        {monthGroup.reports.map((report) => renderReportCard(report))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           ) : viewMode === 'BY_ZONE' ? (
+            /* ========================================================================= */
+            /* 📍 GROUPED BY ZONE */
+            /* ========================================================================= */
             <div className="space-y-4">
               {groupedByZone.map(([zoneName, zoneReports]) => {
                 const isCollapsed = !!collapsedZones[zoneName];
@@ -610,6 +768,9 @@ export const AdminReportingView: React.FC<AdminReportingViewProps> = ({
               })}
             </div>
           ) : (
+            /* ========================================================================= */
+            /* 📋 FLAT CHRONOLOGICAL LIST */
+            /* ========================================================================= */
             <div className="space-y-3">
               {filteredReports.map((report) => renderReportCard(report))}
             </div>

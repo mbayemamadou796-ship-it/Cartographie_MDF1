@@ -613,7 +613,7 @@ export default function App() {
   useEffect(() => {
     const allowedTabs = userRole === 'admin'
       ? ['dashboard', 'directory', 'zones', 'reportings', 'demandes', 'users', 'quality', 'import_export', 'audit_logs', 'settings']
-      : ['dashboard', 'directory', 'zones', 'reportings', 'demandes'];
+      : ['dashboard', 'directory', 'zones', 'reportings'];
 
     if (!allowedTabs.includes(activeTab)) {
       setActiveTab('directory');
@@ -1963,8 +1963,8 @@ export default function App() {
           />
         )}
 
-        {/* Tab: Demandes d'inscription & mise à jour */}
-        {activeTab === 'demandes' && (
+        {/* Tab: Demandes d'inscription & mise à jour (Admin Only) */}
+        {activeTab === 'demandes' && userRole === 'admin' && (
           <DemandesView
             demandes={demandes}
             userRole={userRole}
